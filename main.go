@@ -40,6 +40,8 @@ import (
     etcd "github.com/coreos/etcd/clientv3"
 )
 
+const ALL_TAG_SYMBOL = "<ALL STREAMS>"
+
 func main() {
     etcdEndpoint := os.Getenv("ETCD_ENDPOINT")
     if len(etcdEndpoint) == 0 {
@@ -73,7 +75,7 @@ func main() {
     }
 }
 
-func tagSliceToSet(tagSlice []string) map[string]struct{} {
+func sliceToSet(tagSlice []string) map[string]struct{} {
     tagSet := make(map[string]struct{})
     for _, tag := range tagSlice {
         tagSet[tag] = struct{}{}
@@ -81,7 +83,7 @@ func tagSliceToSet(tagSlice []string) map[string]struct{} {
     return tagSet
 }
 
-func tagSetToSlice(tagSet map[string]struct{}) []string {
+func setToSlice(tagSet map[string]struct{}) []string {
     tagSlice := make([]string, 0, len(tagSet))
     for tag := range tagSet {
         tagSlice = append(tagSlice, tag)
@@ -90,25 +92,28 @@ func tagSetToSlice(tagSet map[string]struct{}) []string {
 }
 
 var errorTxFail = errors.New("Transacation for atomic update failed; try again")
+var errorAlreadyExists = errors.New("Already exists")
 
 var ops = map[string]func(ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
     "adduser": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
         if len(tokens) < 3 {
+            fmt.Println("adduser - creates a new user account")
             fmt.Println("Usage: adduser username password [tag1] [tag2] ...")
             return nil
         }
-        tagSet := tagSliceToSet(tokens[3:])
-        tagSet["public"] = struct{}{}
+        tagSet := sliceToSet(tokens[3:])
+        tagSet[accounts.PUBLIC_TAG] = struct{}{}
         acc := &accounts.MrPlotterAccount{Username: tokens[1], Tags: tagSet}
         acc.SetPassword([]byte(tokens[2]))
         success, err := accounts.UpsertAccountAtomically(ctx, etcdClient, acc)
         if !success {
-            return errorTxFail
+            return errorAlreadyExists
         }
         return err
     },
     "setpassword": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
         if len(tokens) != 3 {
+            fmt.Println("setpassword - sets a user's password")
             fmt.Println("Usage: setpassword username password")
             return nil
         }
@@ -124,15 +129,23 @@ var ops = map[string]func(ctx context.Context, etcdClient *etcd.Client, tokens [
         return err
     },
     "rmuser": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
-        if len(tokens) != 2 {
-            fmt.Println("Usage: rmuser username")
+        if len(tokens) < 2 {
+            fmt.Println("rmuser - deletes user accounts")
+            fmt.Println("Usage: rmuser username1 [username2] [username3] ...")
             return nil
         }
-        return accounts.DeleteAccount(ctx, etcdClient, tokens[1])
+        for _, username := range tokens[1:] {
+            err := accounts.DeleteAccount(ctx, etcdClient, username)
+            if err != nil {
+                return err
+            }
+        }
+        return nil
     },
     "rmusers": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
         if len(tokens) != 2 {
-            fmt.Println("Usage: rmusers prefix")
+            fmt.Println("rmusers - deletes all user accounts whose username begins with a certain prefix")
+            fmt.Println("Usage: rmusers usernameprefix")
             return nil
         }
         n, err := accounts.DeleteMultipleAccounts(ctx, etcdClient, tokens[1])
@@ -143,9 +156,10 @@ var ops = map[string]func(ctx context.Context, etcdClient *etcd.Client, tokens [
         }
         return err
     },
-    "addtags": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+    "grant": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
         if len(tokens) < 3 {
-            fmt.Println("Usage: addtags username tag1 [tag2] [tag3] ...")
+            fmt.Println("grant - grants a user permission to view streams with one or more tags")
+            fmt.Println("Usage: grant username tag1 [tag2] [tag3] ...")
             return nil
         }
         acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[1])
@@ -163,9 +177,10 @@ var ops = map[string]func(ctx context.Context, etcdClient *etcd.Client, tokens [
         }
         return err
     },
-    "rmtags": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+    "revoke": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
         if len(tokens) < 3 {
-            fmt.Println("Usage: rmtags username tag1 [tag2] [tag3] ...")
+            fmt.Println("revoke - revokes tags from a user's permission list")
+            fmt.Println("Usage: revoke username tag1 [tag2] [tag3] ...")
             return nil
         }
         acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[1])
@@ -173,8 +188,8 @@ var ops = map[string]func(ctx context.Context, etcdClient *etcd.Client, tokens [
             return err
         }
         for _, tag := range tokens[2:] {
-            if tag == "public" {
-                continue
+            if tag == accounts.PUBLIC_TAG {
+                return fmt.Errorf("All user accounts are assigned the \"%s\" tag\n", accounts.PUBLIC_TAG)
             }
             if _, ok := acc.Tags[tag]; ok {
                 delete(acc.Tags, tag)
@@ -186,21 +201,25 @@ var ops = map[string]func(ctx context.Context, etcdClient *etcd.Client, tokens [
         }
         return err
     },
-    "lstags": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
-        if len(tokens) != 2 {
-            fmt.Println("Usage: lstags username")
+    "showuser": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+        if len(tokens) < 2 {
+            fmt.Println("showuser - shows the tags granted to a user or users")
+            fmt.Println("Usage: showuser username1 [username2] [username3] ...")
             return nil
         }
-        acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[1])
-        if err != nil {
-            return err
+        for _, username := range tokens[1:] {
+            acc, err := accounts.RetrieveAccount(ctx, etcdClient, username)
+            if err != nil {
+                return err
+            }
+            tagSlice := setToSlice(acc.Tags)
+            fmt.Printf("%s: %s\n", username, strings.Join(tagSlice, " "))
         }
-        tagSlice := tagSetToSlice(acc.Tags)
-        fmt.Println(strings.Join(tagSlice, " "))
         return nil
     },
     "lsusers": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
         if len(tokens) != 1 && len(tokens) != 2 {
+            fmt.Println("lsusers - shows the tags granted to all user accounts whose names begin with a given prefix")
             fmt.Println("Usage: lsusers [prefix]")
             return nil
         }
@@ -219,13 +238,167 @@ var ops = map[string]func(ctx context.Context, etcdClient *etcd.Client, tokens [
             if acc.Tags == nil {
                 fmt.Printf("%s [CORRUPT ENTRY]\n", acc.Username)
             } else {
-                fmt.Println(acc.Username)
+                tagSlice := setToSlice(acc.Tags)
+                fmt.Printf("%s: %s\n", acc.Username, strings.Join(tagSlice, " "))
+            }
+        }
+        return nil
+    },
+    "deftag": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+        if len(tokens) < 3 {
+            fmt.Println("deftag - defines a new tag, which is a unit of permissions that can be granted to a user")
+            fmt.Println("Usage: deftag tag pathprefix1 [pathprefix2] ...")
+            return nil
+        }
+        if tokens[1] == accounts.ALL_TAG {
+            return errorAlreadyExists
+        }
+        pfxSet := sliceToSet(tokens[2:])
+        tagdef := &accounts.MrPlotterTagDef{Tag: tokens[1], PathPrefix: pfxSet}
+        success, err := accounts.UpsertTagDefAtomically(ctx, etcdClient, tagdef)
+        if !success {
+            return errorAlreadyExists
+        }
+        return err
+    },
+    "undeftag": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+        if len(tokens) < 2 {
+            fmt.Println("undeftag - deletes tag definitions")
+            fmt.Println("Usage: undeftag username")
+            return nil
+        }
+        for _, tagname := range tokens[1:] {
+            if tagname == accounts.ALL_TAG {
+                fmt.Printf("Tag \"%s\" cannot be deleted\n", accounts.ALL_TAG)
+            }
+            err := accounts.DeleteTagDef(ctx, etcdClient, tagname)
+            if err != nil {
+                return err
+            }
+        }
+        return nil
+    },
+    "undeftags": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+        if len(tokens) != 2 {
+            fmt.Println("undeftags - deletes all tag definitions where the tag name begins with a certain prefix")
+            fmt.Println("Usage: undeftags prefix")
+            return nil
+        }
+        n, err := accounts.DeleteMultipleTagDefs(ctx, etcdClient, tokens[1])
+        if n == 1 {
+            fmt.Println("Deleted 1 tag definition")
+        } else {
+            fmt.Printf("Deleted %v tag definitions\n", n)
+        }
+        return err
+    },
+    "addprefix": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+        if len(tokens) < 3 {
+            fmt.Println("addprefix - adds a path prefix to a tag definition")
+            fmt.Println("Usage: addprefix tag prefix1 [prefix2] [prefix3] ...")
+            return nil
+        }
+        if tokens[1] == accounts.ALL_TAG {
+            return fmt.Errorf("Cannot modify definition of \"%s\" tag\n", accounts.ALL_TAG)
+        }
+        tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tokens[1])
+        if err != nil {
+            return err
+        }
+        for _, pfx := range tokens[2:] {
+            if _, ok := tagdef.PathPrefix[pfx]; !ok {
+                tagdef.PathPrefix[pfx] = struct{}{}
+            }
+        }
+        success, err := accounts.UpsertTagDefAtomically(ctx, etcdClient, tagdef)
+        if !success {
+            return errorTxFail
+        }
+        return err
+    },
+    "rmprefix": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+        if len(tokens) < 3 {
+            fmt.Println("rmprefix - removes a path prefix from a tag definition")
+            fmt.Println("Usage: rmprefix tag prefix1 [prefix2] [prefix3] ...")
+            return nil
+        }
+        if tokens[1] == accounts.ALL_TAG {
+            return fmt.Errorf("Cannot modify definition of \"%s\" tag\n", accounts.ALL_TAG)
+        }
+        tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tokens[1])
+        if err != nil {
+            return err
+        }
+        for _, pfx := range tokens[2:] {
+            if _, ok := tagdef.PathPrefix[pfx]; ok {
+                if len(tagdef.PathPrefix) == 1 {
+                    return errors.New("Each tag must be assigned at least one prefix (use undeftag or undeftags to fully remove a tag)")
+                }
+                delete(tagdef.PathPrefix, pfx)
+            }
+        }
+        success, err := accounts.UpsertTagDefAtomically(ctx, etcdClient, tagdef)
+        if !success {
+            return errorTxFail
+        }
+        return err
+    },
+    "showtagdef": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+        if len(tokens) < 2 {
+            fmt.Println("showtagdef - lists the prefixes assigned to a tag")
+            fmt.Println("Usage: showtagdef tag1 [tag2] [tag3] ...")
+            return nil
+        }
+        for _, tagname := range tokens[1:] {
+            if tokens[1] == accounts.ALL_TAG {
+                fmt.Printf("%s: %s\n", accounts.ALL_TAG, ALL_TAG_SYMBOL)
+                return nil
+            }
+            tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tagname)
+            if err != nil {
+                return err
+            }
+            pfxSlice := setToSlice(tagdef.PathPrefix)
+            fmt.Printf("%s: %s\n", tagname, strings.Join(pfxSlice, " "))
+        }
+        return nil
+    },
+    "lstagdefs": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
+        if len(tokens) != 1 && len(tokens) != 2 {
+            fmt.Println("lstagdefs - lists the prefixes assigned to all tags whose names begin with a certain prefix")
+            fmt.Println("Usage: lstagdefs [prefix]")
+            return nil
+        }
+
+        prefix := ""
+        if len(tokens) == 2 {
+            prefix = tokens[1]
+        }
+
+        tagdefs, err := accounts.RetrieveMultipleTagDefs(ctx, etcdClient, prefix)
+        if err != nil {
+            return err
+        }
+
+        if strings.HasPrefix(accounts.ALL_TAG, prefix) {
+            fmt.Printf("%s: %s\n", accounts.ALL_TAG, ALL_TAG_SYMBOL)
+        }
+        for _, tagdef := range tagdefs {
+            if tagdef.Tag == accounts.ALL_TAG {
+                continue
+            }
+            if tagdef.PathPrefix == nil {
+                fmt.Printf("%s [CORRUPT ENTRY]\n", tagdef.Tag)
+            } else {
+                pfxSlice := setToSlice(tagdef.PathPrefix)
+                fmt.Printf("%s: %s\n", tagdef.Tag, strings.Join(pfxSlice, " "))
             }
         }
         return nil
     },
     "ls": func (ctx context.Context, etcdClient *etcd.Client, tokens []string) error {
         if len(tokens) != 1 && len(tokens) != 2 {
+            fmt.Println("ls - lists the path prefixes viewable by each user in the current configuration")
             fmt.Println("Usage: ls [prefix]")
             return nil
         }
@@ -244,8 +417,32 @@ var ops = map[string]func(ctx context.Context, etcdClient *etcd.Client, tokens [
             if acc.Tags == nil {
                 fmt.Printf("%s [CORRUPT ENTRY]\n", acc.Username)
             } else {
-                tagSlice := tagSetToSlice(acc.Tags)
-                fmt.Printf("%s: %s\n", acc.Username, strings.Join(tagSlice, " "))
+                tagcache := make(map[string]map[string]struct{})
+
+                prefixes := make(map[string]struct{})
+                for tag := range acc.Tags {
+                    var tagPfxSet map[string]struct{}
+                    var ok bool
+
+                    /* The ALL tag overrides everything. */
+                    if tag == accounts.ALL_TAG {
+                        prefixes = make(map[string]struct{})
+                        prefixes[ALL_TAG_SYMBOL] = struct{}{}
+                        break
+                    }
+
+                    if tagPfxSet, ok = tagcache[tag]; !ok {
+                        tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tag)
+                        if err != nil {
+                            return fmt.Errorf("Could not retrieve tag information for '%s': %v\n", tag, err)
+                        }
+                        tagPfxSet = tagdef.PathPrefix
+                    }
+                    for pfx := range tagPfxSet {
+                        prefixes[pfx] = struct{}{}
+                    }
+                }
+                fmt.Printf("%s: %s\n", acc.Username, strings.Join(setToSlice(prefixes), " "))
             }
         }
         return nil
