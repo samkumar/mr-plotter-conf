@@ -41,6 +41,7 @@ import (
 	"github.com/samkumar/mr-plotter-conf/cli"
 )
 
+var mpcli *cli.MrPlotterCLIModule
 var ops = make(map[string]admincli.CLIModule)
 
 func main() {
@@ -59,7 +60,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	mpcli := cli.NewMrPlotterCLIModule(etcdClient)
+	mpcli = cli.NewMrPlotterCLIModule(etcdClient)
 	cmds := mpcli.Children()
 	for _, cmd := range cmds {
 		ops[cmd.Name()] = cmd
@@ -84,8 +85,8 @@ func main() {
 
 func help() {
 	commands := make([]string, 0, len(ops))
-	for op := range ops {
-		commands = append(commands, op)
+	for _, cmd := range mpcli.Children() {
+		commands = append(commands, cmd.Name())
 	}
 	fmt.Println("Type one of the following commands and press <Enter> or <Return> to execute it:")
 	fmt.Println(strings.Join(commands, " "))

@@ -75,7 +75,7 @@ func (mpc *MrPlotterCommand) Runnable() bool {
 
 // Run executes the CLI command encapsulated by this MrPlotterCommand.
 func (mpc *MrPlotterCommand) Run(ctx context.Context, output io.Writer, args ...string) (argsOk bool) {
-	return mpc.exec(ctx, nil, args...)
+	return mpc.exec(ctx, output, args...)
 }
 
 // AllTagSymbol is the symbol that is used to denote the streams accessible with
@@ -101,20 +101,20 @@ func setToSlice(tagSet map[string]struct{}) []string {
 	return tagSlice
 }
 
-func writeString(output io.Writer, message string) error {
+func writeStringln(output io.Writer, message string) error {
 	_, err := fmt.Fprintln(output, message)
 	return err
 }
 
 func writeStringf(output io.Writer, format string, a ...interface{}) error {
-	message := fmt.Sprintf(format, a...)
-	return writeString(output, message)
+	_, err := fmt.Fprintf(output, format, a...)
+	return err
 }
 
 func writeError(output io.Writer, err error) (bool, error) {
 	var err2 error
 	if err != nil {
-		err2 = writeString(output, err.Error())
+		err2 = writeStringf(output, "Operation failed: %s\n", err.Error())
 	}
 	return err != nil, err2
 }
@@ -125,8 +125,8 @@ type MrPlotterCLIModule struct {
 }
 
 // NewMrPlotterCLIModule returns a new instance of MrPlotterCLIModule.
-func NewMrPlotterCLIModule(ecl *etcd.Client) MrPlotterCLIModule {
-	return MrPlotterCLIModule{ecl}
+func NewMrPlotterCLIModule(ecl *etcd.Client) *MrPlotterCLIModule {
+	return &MrPlotterCLIModule{ecl}
 }
 
 // Children returns the CLI functions for the Mr. Plotter CLI module.
@@ -147,7 +147,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				acc.SetPassword([]byte(tokens[2]))
 				success, err := accounts.UpsertAccountAtomically(ctx, etcdClient, acc)
 				if !success {
-					writeString(output, alreadyExists)
+					writeStringln(output, alreadyExists)
 					return
 				}
 				writeError(output, err)
@@ -169,7 +169,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				acc.SetPassword([]byte(tokens[2]))
 				success, err := accounts.UpsertAccountAtomically(ctx, etcdClient, acc)
 				if !success {
-					writeString(output, txFail)
+					writeStringln(output, txFail)
 					return
 				}
 				writeError(output, err)
@@ -203,7 +203,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				}
 				n, err := accounts.DeleteMultipleAccounts(ctx, etcdClient, tokens[1])
 				if n == 1 {
-					writeString(output, "Deleted 1 account")
+					writeStringln(output, "Deleted 1 account")
 				} else {
 					writeStringf(output, "Deleted %v accounts\n", n)
 				}
@@ -230,7 +230,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				}
 				success, err := accounts.UpsertAccountAtomically(ctx, etcdClient, acc)
 				if !success {
-					writeString(output, txFail)
+					writeStringln(output, txFail)
 					return
 				}
 				writeError(output, err)
@@ -260,7 +260,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				}
 				success, err := accounts.UpsertAccountAtomically(ctx, etcdClient, acc)
 				if !success {
-					writeString(output, txFail)
+					writeStringln(output, txFail)
 					return
 				}
 				writeError(output, err)
@@ -325,14 +325,14 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 					return
 				}
 				if tokens[1] == accounts.ALL_TAG {
-					writeString(output, alreadyExists)
+					writeStringln(output, alreadyExists)
 					return
 				}
 				pfxSet := sliceToSet(tokens[2:])
 				tagdef := &accounts.MrPlotterTagDef{Tag: tokens[1], PathPrefix: pfxSet}
 				success, err := accounts.UpsertTagDefAtomically(ctx, etcdClient, tagdef)
 				if !success {
-					writeString(output, alreadyExists)
+					writeStringln(output, alreadyExists)
 					return
 				}
 				writeError(output, err)
@@ -370,7 +370,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				}
 				n, err := accounts.DeleteMultipleTagDefs(ctx, etcdClient, tokens[1])
 				if n == 1 {
-					writeString(output, "Deleted 1 tag definition")
+					writeStringln(output, "Deleted 1 tag definition")
 				} else {
 					writeStringf(output, "Deleted %v tag definitions\n", n)
 				}
@@ -401,7 +401,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				}
 				success, err := accounts.UpsertTagDefAtomically(ctx, etcdClient, tagdef)
 				if !success {
-					writeString(output, txFail)
+					writeStringln(output, txFail)
 					return
 				}
 				writeError(output, err)
@@ -427,7 +427,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				for _, pfx := range tokens[2:] {
 					if _, ok := tagdef.PathPrefix[pfx]; ok {
 						if len(tagdef.PathPrefix) == 1 {
-							writeString(output, "Each tag must be assigned at least one prefix (use undeftag or undeftags to fully remove a tag)")
+							writeStringln(output, "Each tag must be assigned at least one prefix (use undeftag or undeftags to fully remove a tag)")
 							return
 						}
 						delete(tagdef.PathPrefix, pfx)
@@ -435,7 +435,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				}
 				success, err := accounts.UpsertTagDefAtomically(ctx, etcdClient, tagdef)
 				if !success {
-					writeString(output, txFail)
+					writeStringln(output, txFail)
 					return
 				}
 				writeError(output, err)
