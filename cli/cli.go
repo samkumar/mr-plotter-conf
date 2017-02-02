@@ -502,7 +502,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			},
 		},
 		&MrPlotterCommand{
-			name:      "ls",
+			name:      "lsconf",
 			usageargs: "[prefix]",
 			hint:      "lists the path prefixes currently visible to each user",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {

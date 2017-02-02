@@ -109,7 +109,7 @@ func accountsExec(etcdClient *etcd.Client, cmd string) {
 	if op, ok := ops[opcode]; ok {
 		argsOK := op.Run(context.Background(), os.Stdout, tokens...)
 		if !argsOK {
-			fmt.Printf("Usage %s %s\n", op.Name(), op.Usage())
+			fmt.Printf("Usage: %s%s", op.Name(), op.Usage())
 		}
 	} else {
 		fmt.Printf("'%s' is not a valid command\n", opcode)
