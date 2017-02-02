@@ -138,13 +138,13 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "username password [tag1] [tag2] ...",
 			hint:      "creates a new user account",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 3; !argsOK {
+				if argsOK = len(tokens) >= 2; !argsOK {
 					return
 				}
-				tagSet := sliceToSet(tokens[3:])
+				tagSet := sliceToSet(tokens[2:])
 				tagSet[accounts.PUBLIC_TAG] = struct{}{}
-				acc := &accounts.MrPlotterAccount{Username: tokens[1], Tags: tagSet}
-				acc.SetPassword([]byte(tokens[2]))
+				acc := &accounts.MrPlotterAccount{Username: tokens[0], Tags: tagSet}
+				acc.SetPassword([]byte(tokens[1]))
 				success, err := accounts.UpsertAccountAtomically(ctx, etcdClient, acc)
 				if !success {
 					writeStringln(output, alreadyExists)
@@ -159,14 +159,14 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "username password",
 			hint:      "sets a user's password",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) == 3; !argsOK {
+				if argsOK = len(tokens) == 2; !argsOK {
 					return
 				}
-				acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[1])
+				acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[0])
 				if waserr, _ := writeError(output, err); waserr {
 					return
 				}
-				acc.SetPassword([]byte(tokens[2]))
+				acc.SetPassword([]byte(tokens[1]))
 				success, err := accounts.UpsertAccountAtomically(ctx, etcdClient, acc)
 				if !success {
 					writeStringln(output, txFail)
@@ -181,10 +181,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "username1 [username2] [username3 ...]",
 			hint:      "deletes user accounts",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 2; !argsOK {
+				if argsOK = len(tokens) >= 1; !argsOK {
 					return
 				}
-				for _, username := range tokens[1:] {
+				for _, username := range tokens {
 					err := accounts.DeleteAccount(ctx, etcdClient, username)
 					if waserr, _ := writeError(output, err); waserr {
 						return
@@ -198,10 +198,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "usernameprefix",
 			hint:      "deletes all user accounts with a certain prefix",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) == 2; !argsOK {
+				if argsOK = len(tokens) == 1; !argsOK {
 					return
 				}
-				n, err := accounts.DeleteMultipleAccounts(ctx, etcdClient, tokens[1])
+				n, err := accounts.DeleteMultipleAccounts(ctx, etcdClient, tokens[0])
 				if n == 1 {
 					writeStringln(output, "Deleted 1 account")
 				} else {
@@ -216,14 +216,14 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "username tag1 [tag2] [tag3] ...",
 			hint:      "grants permission to view streams with given tags",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 3; !argsOK {
+				if argsOK = len(tokens) >= 2; !argsOK {
 					return
 				}
-				acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[1])
+				acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[0])
 				if waserr, _ := writeError(output, err); waserr {
 					return
 				}
-				for _, tag := range tokens[2:] {
+				for _, tag := range tokens[1:] {
 					if _, ok := acc.Tags[tag]; !ok {
 						acc.Tags[tag] = struct{}{}
 					}
@@ -242,14 +242,14 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "username tag1 [tag2] [tag3] ...",
 			hint:      "revokes tags from a user's permission list",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 3; !argsOK {
+				if argsOK = len(tokens) >= 2; !argsOK {
 					return
 				}
-				acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[1])
+				acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[0])
 				if waserr, _ := writeError(output, err); waserr {
 					return
 				}
-				for _, tag := range tokens[2:] {
+				for _, tag := range tokens[1:] {
 					if tag == accounts.PUBLIC_TAG {
 						writeStringf(output, "All user accounts must be assigned the \"%s\" tag\n", accounts.PUBLIC_TAG)
 						return
@@ -272,10 +272,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "username1 [username2] [username3] ...",
 			hint:      "shows the tags granted to a user or users",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 2; !argsOK {
+				if argsOK = len(tokens) >= 1; !argsOK {
 					return
 				}
-				for _, username := range tokens[1:] {
+				for _, username := range tokens {
 					acc, err := accounts.RetrieveAccount(ctx, etcdClient, username)
 					if waserr, _ := writeError(output, err); waserr {
 						return
@@ -291,13 +291,13 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "[prefix]",
 			hint:      "shows the tags granted to all user accounts with a given prefix",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) == 1 || len(tokens) == 2; !argsOK {
+				if argsOK = len(tokens) == 0 || len(tokens) == 1; !argsOK {
 					return
 				}
 
 				prefix := ""
-				if len(tokens) == 2 {
-					prefix = tokens[1]
+				if len(tokens) == 1 {
+					prefix = tokens[0]
 				}
 
 				accs, err := accounts.RetrieveMultipleAccounts(ctx, etcdClient, prefix)
@@ -321,15 +321,15 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "tag pathprefix1 [pathprefix2] ...",
 			hint:      "defines a new tag",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 3; !argsOK {
+				if argsOK = len(tokens) >= 2; !argsOK {
 					return
 				}
-				if tokens[1] == accounts.ALL_TAG {
+				if tokens[0] == accounts.ALL_TAG {
 					writeStringln(output, alreadyExists)
 					return
 				}
-				pfxSet := sliceToSet(tokens[2:])
-				tagdef := &accounts.MrPlotterTagDef{Tag: tokens[1], PathPrefix: pfxSet}
+				pfxSet := sliceToSet(tokens[1:])
+				tagdef := &accounts.MrPlotterTagDef{Tag: tokens[0], PathPrefix: pfxSet}
 				success, err := accounts.UpsertTagDefAtomically(ctx, etcdClient, tagdef)
 				if !success {
 					writeStringln(output, alreadyExists)
@@ -341,13 +341,13 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 		},
 		&MrPlotterCommand{
 			name:      "undeftag",
-			usageargs: "username",
+			usageargs: "tag1 [tag2] [tag3] ...",
 			hint:      "deletes tag definitions",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 2; !argsOK {
+				if argsOK = len(tokens) >= 1; !argsOK {
 					return
 				}
-				for _, tagname := range tokens[1:] {
+				for _, tagname := range tokens {
 					if tagname == accounts.ALL_TAG {
 						writeStringf(output, "Tag \"%s\" cannot be deleted\n", accounts.ALL_TAG)
 						return
@@ -365,10 +365,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "prefix",
 			hint:      "deletes tag definitions beginning with a certain prefix",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) == 2; !argsOK {
+				if argsOK = len(tokens) == 1; !argsOK {
 					return
 				}
-				n, err := accounts.DeleteMultipleTagDefs(ctx, etcdClient, tokens[1])
+				n, err := accounts.DeleteMultipleTagDefs(ctx, etcdClient, tokens[0])
 				if n == 1 {
 					writeStringln(output, "Deleted 1 tag definition")
 				} else {
@@ -383,18 +383,18 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "tag prefix1 [prefix2] [prefix3] ...",
 			hint:      "adds a path prefix to a tag definition",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 3; !argsOK {
+				if argsOK = len(tokens) >= 2; !argsOK {
 					return
 				}
-				if tokens[1] == accounts.ALL_TAG {
+				if tokens[0] == accounts.ALL_TAG {
 					writeStringf(output, "Cannot modify definition of \"%s\" tag\n", accounts.ALL_TAG)
 					return
 				}
-				tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tokens[1])
+				tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tokens[0])
 				if waserr, _ := writeError(output, err); waserr {
 					return
 				}
-				for _, pfx := range tokens[2:] {
+				for _, pfx := range tokens[1:] {
 					if _, ok := tagdef.PathPrefix[pfx]; !ok {
 						tagdef.PathPrefix[pfx] = struct{}{}
 					}
@@ -413,18 +413,18 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "tag prefix1 [prefix2] [prefix3] ...",
 			hint:      "removes a path prefix from a tag definition",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 3; !argsOK {
+				if argsOK = len(tokens) >= 2; !argsOK {
 					return
 				}
-				if tokens[1] == accounts.ALL_TAG {
+				if tokens[0] == accounts.ALL_TAG {
 					writeStringf(output, "Cannot modify definition of \"%s\" tag\n", accounts.ALL_TAG)
 					return
 				}
-				tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tokens[1])
+				tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tokens[0])
 				if waserr, _ := writeError(output, err); waserr {
 					return
 				}
-				for _, pfx := range tokens[2:] {
+				for _, pfx := range tokens[1:] {
 					if _, ok := tagdef.PathPrefix[pfx]; ok {
 						if len(tagdef.PathPrefix) == 1 {
 							writeStringln(output, "Each tag must be assigned at least one prefix (use undeftag or undeftags to fully remove a tag)")
@@ -447,13 +447,13 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "tag1 [tag2] [tag3] ...",
 			hint:      "lists the prefixes assigned to a tag",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) >= 2; !argsOK {
+				if argsOK = len(tokens) >= 1; !argsOK {
 					return
 				}
-				for _, tagname := range tokens[1:] {
-					if tokens[1] == accounts.ALL_TAG {
+				for _, tagname := range tokens {
+					if tagname == accounts.ALL_TAG {
 						writeStringf(output, "%s: %s\n", accounts.ALL_TAG, AllTagSymbol)
-						return
+						continue
 					}
 					tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tagname)
 					if waserr, _ := writeError(output, err); waserr {
@@ -470,13 +470,13 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "[tagprefix]",
 			hint:      "lists the prefixes assigned to all tags beginning with a given prefix",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) == 1 || len(tokens) == 2; !argsOK {
+				if argsOK = len(tokens) == 0 || len(tokens) == 1; !argsOK {
 					return
 				}
 
 				prefix := ""
-				if len(tokens) == 2 {
-					prefix = tokens[1]
+				if len(tokens) == 1 {
+					prefix = tokens[0]
 				}
 
 				tagdefs, err := accounts.RetrieveMultipleTagDefs(ctx, etcdClient, prefix)
@@ -506,13 +506,13 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			usageargs: "[prefix]",
 			hint:      "lists the path prefixes currently visible to each user",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-				if argsOK = len(tokens) == 1 || len(tokens) == 2; !argsOK {
+				if argsOK = len(tokens) == 0 || len(tokens) == 1; !argsOK {
 					return
 				}
 
 				prefix := ""
-				if len(tokens) == 2 {
-					prefix = tokens[1]
+				if len(tokens) == 1 {
+					prefix = tokens[0]
 				}
 
 				accs, err := accounts.RetrieveMultipleAccounts(ctx, etcdClient, prefix)

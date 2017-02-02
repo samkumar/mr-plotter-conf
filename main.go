@@ -107,7 +107,7 @@ func accountsExec(etcdClient *etcd.Client, cmd string) {
 	}
 
 	if op, ok := ops[opcode]; ok {
-		argsOK := op.Run(context.Background(), os.Stdout, tokens...)
+		argsOK := op.Run(context.Background(), os.Stdout, tokens[1:]...)
 		if !argsOK {
 			fmt.Printf("Usage: %s%s", op.Name(), op.Usage())
 		}
