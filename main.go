@@ -36,12 +36,13 @@ import (
 	"strings"
 
 	"github.com/SoftwareDefinedBuildings/mr-plotter/accounts"
-	etcd "github.com/coreos/etcd/clientv3"
 	"github.com/immesys/smartgridstore/admincli"
 	"github.com/samkumar/mr-plotter-conf/cli"
+
+	etcd "github.com/coreos/etcd/clientv3"
 )
 
-var mpcli *cli.MrPlotterCLIModule
+var mpcli admincli.CLIModule
 var ops = make(map[string]admincli.CLIModule)
 
 func main() {

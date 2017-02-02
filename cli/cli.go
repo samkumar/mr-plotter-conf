@@ -576,6 +576,16 @@ func (mpcli *MrPlotterCLIModule) Usage() string {
 		Permissions can be described at the granularity of collections in BTrDB. In other words, for each collection, a user has either permission to view all of the streams in the collection, or does not have permission to view any of them.
 		A tag represents a set of permissions that can be granted to a user. Each tag is defined by a list of collection prefixes, and represents permissions to view streams belonging to collections beginning with one of those prefixes.
 		The permissions granted to a user are defined by a list of tags. A user can view a stream if and only if one of the tags assigned to that user grants permission to view that stream.
-		There are two special tags: \"public\" and \"all\". \"public\" describes the streams viewable to users who are not logged in. The \"all\" tag grants access to all streams.
+		There are two special tags: "public" and "all". The "public" tag describes the streams viewable to users who are not logged in. The "all" tag grants access to all streams.
 		`
+}
+
+// Runnable returns false.
+func (mpcli *MrPlotterCLIModule) Runnable() bool {
+	return false
+}
+
+// Run does nothing and returns false.
+func (mpcli *MrPlotterCLIModule) Run(ctx context.Context, output io.Writer, args ...string) (argsOk bool) {
+	return false
 }
