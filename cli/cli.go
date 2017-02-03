@@ -84,6 +84,8 @@ const AllTagSymbol = "<ALL STREAMS>"
 
 const txFail = "Transacation for atomic update failed; try again"
 const alreadyExists = "Already exists"
+const accountNotExists = "Account does not exist"
+const tagNotExists = "Tag is not defined"
 
 func sliceToSet(tagSlice []string) map[string]struct{} {
 	tagSet := make(map[string]struct{})
@@ -166,6 +168,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				if waserr, _ := writeError(output, err); waserr {
 					return
 				}
+				if acc == nil {
+					writeStringln(output, accountNotExists)
+					return
+				}
 				acc.SetPassword([]byte(tokens[1]))
 				success, err := accounts.UpsertAccountAtomically(ctx, etcdClient, acc)
 				if !success {
@@ -223,6 +229,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				if waserr, _ := writeError(output, err); waserr {
 					return
 				}
+				if acc == nil {
+					writeStringln(output, accountNotExists)
+					return
+				}
 				for _, tag := range tokens[1:] {
 					if _, ok := acc.Tags[tag]; !ok {
 						acc.Tags[tag] = struct{}{}
@@ -247,6 +257,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				}
 				acc, err := accounts.RetrieveAccount(ctx, etcdClient, tokens[0])
 				if waserr, _ := writeError(output, err); waserr {
+					return
+				}
+				if acc == nil {
+					writeStringln(output, accountNotExists)
 					return
 				}
 				for _, tag := range tokens[1:] {
@@ -278,6 +292,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				for _, username := range tokens {
 					acc, err := accounts.RetrieveAccount(ctx, etcdClient, username)
 					if waserr, _ := writeError(output, err); waserr {
+						return
+					}
+					if acc == nil {
+						writeStringln(output, accountNotExists)
 						return
 					}
 					tagSlice := setToSlice(acc.Tags)
@@ -394,6 +412,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				if waserr, _ := writeError(output, err); waserr {
 					return
 				}
+				if tagdef == nil {
+					writeStringln(output, tagNotExists)
+					return
+				}
 				for _, pfx := range tokens[1:] {
 					if _, ok := tagdef.PathPrefix[pfx]; !ok {
 						tagdef.PathPrefix[pfx] = struct{}{}
@@ -422,6 +444,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				}
 				tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tokens[0])
 				if waserr, _ := writeError(output, err); waserr {
+					return
+				}
+				if tagdef == nil {
+					writeStringln(output, tagNotExists)
 					return
 				}
 				for _, pfx := range tokens[1:] {
@@ -459,6 +485,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 					if waserr, _ := writeError(output, err); waserr {
 						return
 					}
+					if tagdef == nil {
+						writeStringln(output, tagNotExists)
+						return
+					}
 					pfxSlice := setToSlice(tagdef.PathPrefix)
 					writeStringf(output, "%s: %s\n", tagname, strings.Join(pfxSlice, " "))
 				}
@@ -492,7 +522,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						continue
 					}
 					if tagdef.PathPrefix == nil {
-						writeStringf(output, "%s [CORRUPT ENTRY]\n", tagdef.Tag)
+						writeStringf(output, "%s: [CORRUPT ENTRY]\n", tagdef.Tag)
 					} else {
 						pfxSlice := setToSlice(tagdef.PathPrefix)
 						writeStringf(output, "%s: %s\n", tagdef.Tag, strings.Join(pfxSlice, " "))
@@ -542,6 +572,10 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 								tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tag)
 								if err != nil {
 									writeStringf(output, "Could not retrieve tag information for '%s': %v\n", tag, err)
+									return
+								}
+								if tagdef == nil {
+									writeStringln(output, tagNotExists)
 									return
 								}
 								tagPfxSet = tagdef.PathPrefix
