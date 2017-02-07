@@ -555,6 +555,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 
 				tagcache := make(map[string]map[string]struct{})
 
+			accloop:
 				for _, acc := range accs {
 					if acc.Tags == nil {
 						writeStringf(output, "%s [CORRUPT ENTRY]\n", acc.Username)
@@ -566,9 +567,8 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 
 							/* The ALL tag overrides everything. */
 							if tag == accounts.ALL_TAG {
-								prefixes = make(map[string]struct{})
-								prefixes[AllTagSymbol] = struct{}{}
-								break
+								writeStringf(output, "%s: %s\n", acc.Username, AllTagSymbol)
+								continue accloop
 							}
 
 							if tagPfxSet, ok = tagcache[tag]; !ok {

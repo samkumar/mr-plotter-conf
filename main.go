@@ -70,7 +70,7 @@ func main() {
 	/* Start the REPL. */
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
-		fmt.Print("Mr. Plotter Accounts> ")
+		fmt.Print("Mr. Plotter> ")
 		if !scanner.Scan() {
 			break
 		}
