@@ -591,7 +591,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						for i := 0; i != len(pfxSlice); i++ {
 							pfxSlice[i] = fmt.Sprintf("%q", pfxSlice[i])
 						}
-						writeStringf(output, "%s: %\n", acc.Username, strings.Join(pfxSlice, " "))
+						writeStringf(output, "%s: %s\n", acc.Username, strings.Join(pfxSlice, " "))
 					}
 				}
 				return
