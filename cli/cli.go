@@ -525,6 +525,9 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						writeStringf(output, "%s: [CORRUPT ENTRY]\n", tagdef.Tag)
 					} else {
 						pfxSlice := setToSlice(tagdef.PathPrefix)
+						for i := 0; i != len(pfxSlice); i++ {
+							pfxSlice[i] = fmt.Sprintf("%q", pfxSlice[i])
+						}
 						writeStringf(output, "%s: %s\n", tagdef.Tag, strings.Join(pfxSlice, " "))
 					}
 				}
@@ -584,7 +587,11 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 								prefixes[pfx] = struct{}{}
 							}
 						}
-						writeStringf(output, "%s: %s\n", acc.Username, strings.Join(setToSlice(prefixes), " "))
+						pfxSlice := setToSlice(prefixes)
+						for i := 0; i != len(pfxSlice); i++ {
+							pfxSlice[i] = fmt.Sprintf("%q", pfxSlice[i])
+						}
+						writeStringf(output, "%s: %\n", acc.Username, strings.Join(pfxSlice, " "))
 					}
 				}
 				return
