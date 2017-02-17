@@ -30,11 +30,13 @@ package cli
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/SoftwareDefinedBuildings/mr-plotter/accounts"
+	"github.com/SoftwareDefinedBuildings/mr-plotter/keys"
 	"github.com/immesys/smartgridstore/admincli"
 
 	etcd "github.com/coreos/etcd/clientv3"
@@ -144,7 +146,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 					return
 				}
 				tagSet := sliceToSet(tokens[2:])
-				tagSet[accounts.PUBLIC_TAG] = struct{}{}
+				tagSet[accounts.PublicTag] = struct{}{}
 				acc := &accounts.MrPlotterAccount{Username: tokens[0], Tags: tagSet}
 				acc.SetPassword([]byte(tokens[1]))
 				success, err := accounts.UpsertAccountAtomically(ctx, etcdClient, acc)
@@ -264,8 +266,8 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 					return
 				}
 				for _, tag := range tokens[1:] {
-					if tag == accounts.PUBLIC_TAG {
-						writeStringf(output, "All user accounts must be assigned the \"%s\" tag\n", accounts.PUBLIC_TAG)
+					if tag == accounts.PublicTag {
+						writeStringf(output, "All user accounts must be assigned the \"%s\" tag\n", accounts.PublicTag)
 						return
 					}
 					if _, ok := acc.Tags[tag]; ok {
@@ -342,10 +344,6 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				if argsOK = len(tokens) >= 2; !argsOK {
 					return
 				}
-				if tokens[0] == accounts.ALL_TAG {
-					writeStringln(output, alreadyExists)
-					return
-				}
 				pfxSet := sliceToSet(tokens[1:])
 				tagdef := &accounts.MrPlotterTagDef{Tag: tokens[0], PathPrefix: pfxSet}
 				success, err := accounts.UpsertTagDefAtomically(ctx, etcdClient, tagdef)
@@ -366,10 +364,6 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 					return
 				}
 				for _, tagname := range tokens {
-					if tagname == accounts.ALL_TAG {
-						writeStringf(output, "Tag \"%s\" cannot be deleted\n", accounts.ALL_TAG)
-						return
-					}
 					err := accounts.DeleteTagDef(ctx, etcdClient, tagname)
 					if waserr, _ := writeError(output, err); waserr {
 						return
@@ -404,10 +398,6 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				if argsOK = len(tokens) >= 2; !argsOK {
 					return
 				}
-				if tokens[0] == accounts.ALL_TAG {
-					writeStringf(output, "Cannot modify definition of \"%s\" tag\n", accounts.ALL_TAG)
-					return
-				}
 				tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tokens[0])
 				if waserr, _ := writeError(output, err); waserr {
 					return
@@ -436,10 +426,6 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 			hint:      "removes a path prefix from a tag definition",
 			exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
 				if argsOK = len(tokens) >= 2; !argsOK {
-					return
-				}
-				if tokens[0] == accounts.ALL_TAG {
-					writeStringf(output, "Cannot modify definition of \"%s\" tag\n", accounts.ALL_TAG)
 					return
 				}
 				tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tokens[0])
@@ -477,10 +463,6 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 					return
 				}
 				for _, tagname := range tokens {
-					if tagname == accounts.ALL_TAG {
-						writeStringf(output, "%s: %s\n", accounts.ALL_TAG, AllTagSymbol)
-						continue
-					}
 					tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tagname)
 					if waserr, _ := writeError(output, err); waserr {
 						return
@@ -514,13 +496,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 					return
 				}
 
-				if strings.HasPrefix(accounts.ALL_TAG, prefix) {
-					writeStringf(output, "%s: %s\n", accounts.ALL_TAG, AllTagSymbol)
-				}
 				for _, tagdef := range tagdefs {
-					if tagdef.Tag == accounts.ALL_TAG {
-						continue
-					}
 					if tagdef.PathPrefix == nil {
 						writeStringf(output, "%s: [CORRUPT ENTRY]\n", tagdef.Tag)
 					} else {
@@ -555,7 +531,6 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 
 				tagcache := make(map[string]map[string]struct{})
 
-			accloop:
 				for _, acc := range accs {
 					if acc.Tags == nil {
 						writeStringf(output, "%s [CORRUPT ENTRY]\n", acc.Username)
@@ -564,12 +539,6 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						for tag := range acc.Tags {
 							var tagPfxSet map[string]struct{}
 							var ok bool
-
-							/* The ALL tag overrides everything. */
-							if tag == accounts.ALL_TAG {
-								writeStringf(output, "%s: %s\n", acc.Username, AllTagSymbol)
-								continue accloop
-							}
 
 							if tagPfxSet, ok = tagcache[tag]; !ok {
 								tagdef, err := accounts.RetrieveTagDef(ctx, etcdClient, tag)
@@ -596,6 +565,208 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 				}
 				return
 			},
+		},
+		&admincli.GenericCLIModule{
+			MChildren: []admincli.CLIModule{
+				&MrPlotterCommand{
+					name:      "setcertsrc",
+					usageargs: "source",
+					hint:      "sets the method by which the certificate is obtained",
+					exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
+						if argsOK = len(tokens) == 1; !argsOK {
+							return
+						}
+						source := tokens[0]
+						if source != "autocert" && source != "hardcoded" && source != "config" {
+							writeStringf(output, "Argument to setcertsrc must be \"autocert\", \"hardcoded\", or \"config\"; got \"%v\"", source)
+							return
+						}
+						err := keys.SetCertificateSource(ctx, etcdClient, source)
+						if err != nil {
+							writeStringf(output, "Could not set certificate source: %v", err)
+						}
+						return
+					},
+				},
+				&MrPlotterCommand{
+					name:      "getcertsrc",
+					usageargs: "",
+					hint:      "gets the method by which the certificate is obtained",
+					exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
+						if argsOK = len(tokens) == 0; !argsOK {
+							return
+						}
+						source, err := keys.GetCertificateSource(ctx, etcdClient)
+						if err != nil {
+							writeStringf(output, "Could not get certificate source: %v", err)
+						}
+						writeStringln(output, source)
+						return
+					},
+				},
+				&admincli.GenericCLIModule{
+					MChildren: []admincli.CLIModule{
+						&MrPlotterCommand{
+							name:      "sethost",
+							usageargs: "hostname",
+							hint:      "sets the hostname for autocert",
+							exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
+								if argsOK = len(tokens) == 1; !argsOK {
+									return
+								}
+								err := keys.SetAutocertHostname(ctx, etcdClient, tokens[0])
+								if err != nil {
+									writeStringf(output, "Could not set autocert host: %v", err)
+								}
+								return
+							},
+						},
+						&MrPlotterCommand{
+							name:      "setemail",
+							usageargs: "email",
+							hint:      "sets the email address for autocert",
+							exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
+								if argsOK = len(tokens) == 1; !argsOK {
+									return
+								}
+								err := keys.SetAutocertEmail(ctx, etcdClient, tokens[0])
+								if err != nil {
+									writeStringf(output, "Could not set autocert email: %v", err)
+								}
+								return
+							},
+						},
+						&MrPlotterCommand{
+							name:      "show",
+							usageargs: "",
+							hint:      "shows autocert information",
+							exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
+								if argsOK = len(tokens) == 0; !argsOK {
+									return
+								}
+								hostname, err := keys.GetAutocertHostname(ctx, etcdClient)
+								if err != nil {
+									writeStringf(output, "Could not get autocert hostname: %v", err)
+								}
+								email, err := keys.GetAutocertEmail(ctx, etcdClient)
+								if err != nil {
+									writeStringf(output, "Could not get autocert email: %v", err)
+								}
+								writeStringf(output, "Hostname: %s\nEmail: %s\n", hostname, email)
+								return
+							},
+						},
+					},
+					MName:     "autocert",
+					MHint:     "configure autocert",
+					MUsage:    "configure autocert",
+					MRunnable: false,
+					MRun:      nil,
+				},
+				&MrPlotterCommand{
+					name:      "sethardcoded",
+					usageargs: "cert key",
+					hint:      "sets the certificate to use when the source is set to \"hardcoded\"",
+					exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
+						if argsOK = len(tokens) == 2; !argsOK {
+							return
+						}
+						cert, err := base64.StdEncoding.DecodeString(tokens[0])
+						if err != nil {
+							writeStringf(output, "cert is not properly base64 encoded: %v", err)
+							return
+						}
+						key, err := base64.StdEncoding.DecodeString(tokens[1])
+						if err != nil {
+							writeStringf(output, "key is not properly base64 encoded: %v", err)
+							return
+						}
+						htls := &keys.HardcodedTLSCertificate{Cert: cert, Key: key}
+						err = keys.UpsertHardcodedTLSCertificate(ctx, etcdClient, htls)
+						if err != nil {
+							writeStringf(output, "Could not set hardcoded certificate: %v", err)
+						}
+						return
+					},
+				},
+				&MrPlotterCommand{
+					name:      "gethardcoded",
+					usageargs: "",
+					hint:      "gets the certificate when the source is set to \"hardcoded\"",
+					exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
+						if argsOK = len(tokens) == 2; !argsOK {
+							return
+						}
+						htls, err := keys.RetrieveHardcodedTLSCertificate(ctx, etcdClient)
+						if err != nil {
+							writeStringf(output, "Could not get hardcoded certificate: %v", err)
+							return
+						}
+						var cert string
+						var key string
+						if htls != nil {
+							cert = string(htls.Cert)
+							key = string(htls.Key)
+						}
+						writeStringf(output, "Cert\n----\n%s\nKey\n---\n%s\n", cert, key)
+						return
+					},
+				},
+				&MrPlotterCommand{
+					name:      "setsessionkeys",
+					usageargs: "encryptkey mackey",
+					hint:      "sets the session keys",
+					exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
+						if argsOK = len(tokens) == 2; !argsOK {
+							return
+						}
+						encrypt, err := base64.StdEncoding.DecodeString(tokens[0])
+						if err != nil {
+							writeStringf(output, "encryptkey is not properly base64 encoded: %v", err)
+							return
+						}
+						mac, err := base64.StdEncoding.DecodeString(tokens[1])
+						if err != nil {
+							writeStringf(output, "mackey is not properly base64 encoded: %v", err)
+							return
+						}
+						sk := &keys.SessionKeys{EncryptKey: encrypt, MACKey: mac}
+						err = keys.UpsertSessionKeys(ctx, etcdClient, sk)
+						if err != nil {
+							writeStringf(output, "Could not set session keys: %v", err)
+						}
+						return
+					},
+				},
+				&MrPlotterCommand{
+					name:      "getsessionkeys",
+					usageargs: "",
+					hint:      "gets the session keys",
+					exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
+						if argsOK = len(tokens) == 2; !argsOK {
+							return
+						}
+						sk, err := keys.RetrieveSessionKeys(ctx, etcdClient)
+						if err != nil {
+							writeStringf(output, "Could not get session keys: %v", err)
+							return
+						}
+						var encrypt string
+						var mac string
+						if sk != nil {
+							encrypt = base64.StdEncoding.EncodeToString(sk.EncryptKey)
+							mac = base64.StdEncoding.EncodeToString(sk.MACKey)
+						}
+						writeStringf(output, "Encrypt Key: %s\nMAC Key: %s\n", encrypt, mac)
+						return
+					},
+				},
+			},
+			MName:     "keys",
+			MHint:     "Manage session and HTTPS keys",
+			MUsage:    "Manage session and HTTPS keys",
+			MRunnable: false,
+			MRun:      nil,
 		},
 	}
 }
