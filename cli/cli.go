@@ -80,10 +80,6 @@ func (mpc *MrPlotterCommand) Run(ctx context.Context, output io.Writer, args ...
 	return mpc.exec(ctx, output, args...)
 }
 
-// AllTagSymbol is the symbol that is used to denote the streams accessible with
-// the "all" tag.
-const AllTagSymbol = "<ALL STREAMS>"
-
 const txFail = "Transacation for atomic update failed; try again"
 const alreadyExists = "Already exists"
 const accountNotExists = "Account does not exist"
@@ -694,7 +690,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 					usageargs: "",
 					hint:      "gets the certificate when the source is set to \"hardcoded\"",
 					exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-						if argsOK = len(tokens) == 2; !argsOK {
+						if argsOK = len(tokens) == 0; !argsOK {
 							return
 						}
 						htls, err := keys.RetrieveHardcodedTLSCertificate(ctx, etcdClient)
@@ -743,7 +739,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 					usageargs: "",
 					hint:      "gets the session keys",
 					exec: func(ctx context.Context, output io.Writer, tokens ...string) (argsOK bool) {
-						if argsOK = len(tokens) == 2; !argsOK {
+						if argsOK = len(tokens) == 0; !argsOK {
 							return
 						}
 						sk, err := keys.RetrieveSessionKeys(ctx, etcdClient)
