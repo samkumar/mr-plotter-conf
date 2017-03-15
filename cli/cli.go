@@ -573,12 +573,12 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						}
 						source := tokens[0]
 						if source != "autocert" && source != "hardcoded" && source != "config" {
-							writeStringf(output, "Argument to setcertsrc must be \"autocert\", \"hardcoded\", or \"config\"; got \"%v\"", source)
+							writeStringf(output, "Argument to setcertsrc must be \"autocert\", \"hardcoded\", or \"config\"; got \"%v\"\n", source)
 							return
 						}
 						err := keys.SetCertificateSource(ctx, etcdClient, source)
 						if err != nil {
-							writeStringf(output, "Could not set certificate source: %v", err)
+							writeStringf(output, "Could not set certificate source: %v\n", err)
 						}
 						return
 					},
@@ -593,7 +593,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						}
 						source, err := keys.GetCertificateSource(ctx, etcdClient)
 						if err != nil {
-							writeStringf(output, "Could not get certificate source: %v", err)
+							writeStringf(output, "Could not get certificate source: %v\n", err)
 						}
 						writeStringln(output, source)
 						return
@@ -611,7 +611,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 								}
 								err := keys.SetAutocertHostname(ctx, etcdClient, tokens[0])
 								if err != nil {
-									writeStringf(output, "Could not set autocert host: %v", err)
+									writeStringf(output, "Could not set autocert host: %v\n", err)
 								}
 								return
 							},
@@ -626,7 +626,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 								}
 								err := keys.SetAutocertEmail(ctx, etcdClient, tokens[0])
 								if err != nil {
-									writeStringf(output, "Could not set autocert email: %v", err)
+									writeStringf(output, "Could not set autocert email: %v\n", err)
 								}
 								return
 							},
@@ -641,11 +641,11 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 								}
 								hostname, err := keys.GetAutocertHostname(ctx, etcdClient)
 								if err != nil {
-									writeStringf(output, "Could not get autocert hostname: %v", err)
+									writeStringf(output, "Could not get autocert hostname: %v\n", err)
 								}
 								email, err := keys.GetAutocertEmail(ctx, etcdClient)
 								if err != nil {
-									writeStringf(output, "Could not get autocert email: %v", err)
+									writeStringf(output, "Could not get autocert email: %v\n", err)
 								}
 								writeStringf(output, "Hostname: %s\nEmail: %s\n", hostname, email)
 								return
@@ -668,18 +668,18 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						}
 						cert, err := base64.StdEncoding.DecodeString(tokens[0])
 						if err != nil {
-							writeStringf(output, "cert is not properly base64 encoded: %v", err)
+							writeStringf(output, "cert is not properly base64 encoded: %v\n", err)
 							return
 						}
 						key, err := base64.StdEncoding.DecodeString(tokens[1])
 						if err != nil {
-							writeStringf(output, "key is not properly base64 encoded: %v", err)
+							writeStringf(output, "key is not properly base64 encoded: %v\n", err)
 							return
 						}
 						htls := &keys.HardcodedTLSCertificate{Cert: cert, Key: key}
 						err = keys.UpsertHardcodedTLSCertificate(ctx, etcdClient, htls)
 						if err != nil {
-							writeStringf(output, "Could not set hardcoded certificate: %v", err)
+							writeStringf(output, "Could not set hardcoded certificate: %v\n", err)
 						}
 						return
 					},
@@ -694,7 +694,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						}
 						htls, err := keys.RetrieveHardcodedTLSCertificate(ctx, etcdClient)
 						if err != nil {
-							writeStringf(output, "Could not get hardcoded certificate: %v", err)
+							writeStringf(output, "Could not get hardcoded certificate: %v\n", err)
 							return
 						}
 						var cert string
@@ -717,18 +717,18 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						}
 						encrypt, err := base64.StdEncoding.DecodeString(tokens[0])
 						if err != nil {
-							writeStringf(output, "encryptkey is not properly base64 encoded: %v", err)
+							writeStringf(output, "encryptkey is not properly base64 encoded: %v\n", err)
 							return
 						}
 						mac, err := base64.StdEncoding.DecodeString(tokens[1])
 						if err != nil {
-							writeStringf(output, "mackey is not properly base64 encoded: %v", err)
+							writeStringf(output, "mackey is not properly base64 encoded: %v\n", err)
 							return
 						}
 						sk := &keys.SessionKeys{EncryptKey: encrypt, MACKey: mac}
 						err = keys.UpsertSessionKeys(ctx, etcdClient, sk)
 						if err != nil {
-							writeStringf(output, "Could not set session keys: %v", err)
+							writeStringf(output, "Could not set session keys: %v\n", err)
 						}
 						return
 					},
@@ -743,7 +743,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 						}
 						sk, err := keys.RetrieveSessionKeys(ctx, etcdClient)
 						if err != nil {
-							writeStringf(output, "Could not get session keys: %v", err)
+							writeStringf(output, "Could not get session keys: %v\n", err)
 							return
 						}
 						var encrypt string
