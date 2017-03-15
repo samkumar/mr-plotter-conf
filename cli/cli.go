@@ -543,8 +543,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 									return
 								}
 								if tagdef == nil {
-									writeStringln(output, tagNotExists)
-									return
+									continue
 								}
 								tagPfxSet = tagdef.PathPrefix
 							}
@@ -704,7 +703,7 @@ func (mpcli *MrPlotterCLIModule) Children() []admincli.CLIModule {
 							cert = string(htls.Cert)
 							key = string(htls.Key)
 						}
-						writeStringf(output, "Cert\n----\n%s\nKey\n---\n%s\n", cert, key)
+						writeStringf(output, "%s%s", cert, key)
 						return
 					},
 				},
